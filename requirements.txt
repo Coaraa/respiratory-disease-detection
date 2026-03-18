@@ -30,5 +30,8 @@ snowflake-snowpark-python
 # Interface
 streamlit
 
+# Data download
+kagglehub
+
 # Notebook
 ipykernel
