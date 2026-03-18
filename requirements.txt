@@ -1,0 +1,34 @@
+# Deep Learning (CUDA 12.6)
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch
+torchvision
+torchaudio
+
+# Audio processing
+librosa
+scipy
+
+# ML
+scikit-learn>=1.5.0
+imbalanced-learn>=0.12.0
+
+# Data
+numpy>=2.1.0
+pandas>=2.2.0
+
+# Visualization
+matplotlib>=3.9.0
+seaborn>=0.13.0
+
+# Explainability
+shap
+grad-cam
+
+# Snowflake
+snowflake-snowpark-python
+
+# Interface
+streamlit
+
+# Notebook
+ipykernel
