@@ -23,6 +23,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.vscode/
 
 # PyInstaller
 *.manifest
@@ -39,6 +40,8 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+.claude/
+CLAUDE.md
 
 # Translations
 *.mo
