@@ -83,7 +83,7 @@ def diagnostic_page():
                     color_discrete_sequence=px.colors.qualitative.Pastel
                 )
                 fig_bar.update_layout(showlegend=False, yaxis={'categoryorder':'total ascending'})
-                st.plotly_chart(fig_bar, use_container_width=True)
+                st.plotly_chart(fig_bar, width='stretch')
                 
                 # Recommandation clinique
                 st.subheader("Recommandation Clinique")
