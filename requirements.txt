@@ -24,6 +24,9 @@ seaborn>=0.13.0
 shap
 grad-cam
 
+# Dotenv
+dotenv
+
 # Snowflake
 snowflake-snowpark-python
 
