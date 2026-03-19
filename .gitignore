@@ -122,3 +122,4 @@ Thumbs.db
 *.h5
 *.model
 data/
+models/
