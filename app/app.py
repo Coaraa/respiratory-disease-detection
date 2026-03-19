@@ -14,7 +14,6 @@ st.set_page_config(
     page_title="Tessan - Diagnostic Respiratoire IA",
     page_icon="🩺",
     layout="wide"
-    
 )
 
 with open(os.path.join(os.path.dirname(__file__), "css/styles.css")) as f:
