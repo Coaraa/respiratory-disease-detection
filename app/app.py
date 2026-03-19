@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -13,9 +14,10 @@ st.set_page_config(
     page_title="Tessan - Diagnostic Respiratoire IA",
     page_icon="🩺",
     layout="wide"
+    
 )
 
-with open("css/styles.css") as f:
+with open(os.path.join(os.path.dirname(__file__), "css/styles.css")) as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 

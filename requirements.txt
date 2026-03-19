@@ -29,6 +29,7 @@ snowflake-snowpark-python
 
 # Interface
 streamlit
+plotly
 
 # Data download
 kagglehub
