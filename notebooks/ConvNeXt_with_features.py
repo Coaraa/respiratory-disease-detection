@@ -166,7 +166,7 @@ def get_predictions(model, X_test, X_features_test, y_test, augmenter, device):
     test_loader = DataLoader(MultiModalDataset(X_test, X_features_test, y_test), batch_size=64, shuffle=False, pin_memory=True)
 
     if model is None:
-        model = RespiratoryFusionModel(num_classes=len(torch.le.classes_), num_features=X_features.shape[1]).to(device)
+        model = RespiratoryFusionModel(num_classes=len(torch.le.classes_), num_features=X_features_test.shape[1]).to(device)
         model.load_state_dict(torch.load("../models/best_model_respiratory_fusion.pth"))
 
     # Faire les prédictions sur le test set
