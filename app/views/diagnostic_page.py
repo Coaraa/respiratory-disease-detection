@@ -8,7 +8,7 @@ import plotly.express as px
 
 def diagnostic_page():         
     # En-tête de l'application
-    st.title("🩺 TESSAN : Détection des Maladies Respiratoires")
+    st.title("Détection des Maladies Respiratoires")
     st.markdown("**Analyse assistée par IA des sons respiratoires en cabine médicale**")
     st.markdown("---")
 

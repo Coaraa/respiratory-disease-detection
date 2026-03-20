@@ -22,7 +22,7 @@
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px); /* Effet de flou moderne en arrière-plan */
     padding: 8px 16px;
-    border-radius: 40px;
+    border-radius: 30px;
     box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.12);
     z-index: 9999;
     display: flex;
@@ -40,7 +40,7 @@
 
 
 .nav-link {
-    padding: 1px 2px;
+    padding: 3px 6px;
     border-radius: 30px;
     transition: all 0.2s ease;
     display: flex;
@@ -54,10 +54,6 @@
     color: #2E86C1;
 }
 
-
-.nav-link img {
-    height: 40px;
-}
 
 
 .block-container {
