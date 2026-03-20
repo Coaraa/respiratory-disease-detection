@@ -123,4 +123,4 @@ Thumbs.db
 *.model
 data/
 models/
-.pth
+*.pth
