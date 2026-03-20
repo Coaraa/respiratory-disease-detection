@@ -1,13 +1,21 @@
-import os
 import base64
 import streamlit as st
+from PIL import Image
 
 from views.diagnostic_page import diagnostic_page
 from views.dashboard_page import dashboard_page
 
+
+favicon_path = "app/assets/favicon.jpg"
+
+try : 
+    favicon = Image.open(favicon_path)
+except FileNotFoundError:
+    favicon = "🩺"
+
 st.set_page_config(
     page_title="Tessan - Diagnostic Respiratoire",
-    page_icon="🩺",
+    page_icon=favicon,
     layout="wide",
     initial_sidebar_state="collapsed"
 )
