@@ -1,8 +1,8 @@
 :root {
-    --french-blue: #1e3a8a;
-    --steel-azure: #004c97;
     --alice-blue: #e2e8f0;
     --bright-snow: #f8f9fa;
+    --gray-blue: #334155;
+    --green: #0F352D;
     --black: #000000;
 }
 
@@ -38,23 +38,27 @@
     padding-right: 12px;
 }
 
-
 .nav-link {
-    padding: 3px 6px;
+    padding: 5px 14px; 
     border-radius: 30px;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     gap: 8px;
     height: 100%;
+    
+    text-decoration: none !important;  
+    color: var(--green) !important;
+    font-family: sans-serif;
+    font-weight: 600; 
+    font-size: 15px;
 }
 
 .nav-link:hover {
-    background-color: #f3f4f6;
-    color: #2E86C1;
+    background-color: #f3f4f6 !important;
+    color: var(--gray-blue) !important; 
+
 }
-
-
 
 .block-container {
     padding-top: 90px !important;

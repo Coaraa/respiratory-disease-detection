@@ -44,8 +44,8 @@ except FileNotFoundError:
 st.markdown(f"""
 <div class="floating-island">
 <img src="data:image/svg+xml;base64,{logo_tessan_b64}" class="logo" alt="Logo Tessan">
-<a href="/?page=diagnostic" target="_self" class="nav-link"><img src="data:image/svg+xml;base64,{icon_diag_b64}" alt="Diagnostic"></a>
-<a href="/?page=dashboard" target="_self" class="nav-link"><img src="data:image/svg+xml;base64,{icon_dash_b64}" alt="Dashboard"></a>
+<a href="/?page=diagnostic" target="_self" class="nav-link"><img src="data:image/svg+xml;base64,{icon_diag_b64}" alt="Diagnostic"> Diagnostic</a>
+<a href="/?page=dashboard" target="_self" class="nav-link"><img src="data:image/svg+xml;base64,{icon_dash_b64}" alt="Dashboard"> Dashboard</a>
 </div>
 """, unsafe_allow_html=True)
 
