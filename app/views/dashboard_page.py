@@ -319,15 +319,18 @@ def load_predictions_sf(totp: str, days: int) -> pd.DataFrame | None:
         return None
 
 
+PERIOD_OPTIONS = {
+    "7 derniers jours":   7,
+    "1 mois":             30,
+    "3 mois":             90,
+    "1 an":               365,
+}
+
 def dashboard_page():
     pharmacies_df = load_pharmacies()
 
-    # ── Sidebar ───────────────────────────────────────────────────────────
+    # ── Sidebar : connexion Snowflake uniquement ──────────────────────────
     with st.sidebar:
-        st.markdown("### Filtres")
-        date_range = st.slider("Période (jours)", 1, 30, 30)
-
-        st.markdown("---")
         st.subheader("🔌 Snowflake")
         if "_sf" not in st.query_params:
             totp = st.text_input("Code MFA (6 chiffres)", max_chars=6, type="password")
@@ -351,14 +354,24 @@ def dashboard_page():
         st.info("Connectez-vous à Snowflake via la sidebar pour afficher les données.")
         st.stop()
 
+    st.title("Tableau de Bord Épidémiologique")
+    st.caption(f"Réseau Tessan · {len(pharmacies_df):,} cabines actives · données Snowflake en direct")
+    st.markdown("---")
+
+    # ── Sélecteur de période ──────────────────────────────────────────────
+    period_label = st.pills(
+        "Période d'analyse",
+        options=list(PERIOD_OPTIONS.keys()),
+        default="1 mois",
+        key="period_filter",
+    )
+    date_range = PERIOD_OPTIONS[period_label]
+
     df = load_predictions_sf(totp, date_range)
     if df is None or df.empty:
-        st.title("Tableau de Bord Épidémiologique")
         st.warning("Aucune donnée disponible pour cette période.")
         st.stop()
 
-    st.title("Tableau de Bord Épidémiologique")
-    st.caption(f"Réseau Tessan · {len(pharmacies_df):,} cabines actives · données Snowflake en direct")
     st.markdown("---")
 
     # ── KPIs ──────────────────────────────────────────────────────────────
