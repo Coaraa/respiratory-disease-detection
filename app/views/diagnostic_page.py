@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,6 +15,10 @@ from pathlib import Path
 from scipy.signal import butter, filtfilt
 from torchvision.models import convnext_tiny
 from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'app' / 'views'))
+
+import grad_cam
 
 # GPUAugmenter importé depuis notebooks/ConvNeXt.py
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'notebooks'))
@@ -45,7 +50,7 @@ TARGET_LEN = SR * 6  # 132 300 samples — 6 secondes
 CLASSES    = ['asthma', 'bronchial', 'copd', 'healthy', 'pneumonia']
 CLASS_MAP  = {
     'asthma':    'Asthme',
-    'bronchial': 'Bronchique',
+    'bronchial': 'Bronchite',
     'copd':      'BPCO',
     'healthy':   'Sain',
     'pneumonia': 'Pneumonie',
@@ -81,7 +86,7 @@ def preprocess_audio(audio):
     """Pipeline : trim → bandpass 100-2000 Hz → normalise → pad/crop 6s."""
     audio, _ = librosa.effects.trim(audio, top_db=20)
     audio = bandpass_filter(audio)
-    audio = audio / (np.max(np.abs(audio)) + 1e-8)
+    #audio = audio / (np.max(np.abs(audio)) + 1e-8)
     return pad_or_crop(audio)
 
 # ── Chargement modèle (mis en cache) ───────────────────────────────────────
@@ -257,6 +262,31 @@ def diagnostic_page():
                     'Pathologie':    [CLASS_MAP[c] for c in CLASSES],
                     'Probabilité (%)': [predictions[c] * 100 for c in CLASSES]
                 })
+
+
+
+
+                # Grad-CAM pour expliquer la prédiction (optionnel, nécessite une image de spectrogramme)
+                S    = librosa.feature.melspectrogram(y=audio_preprocessed, sr=SR, n_fft=1024, hop_length=512, n_mels=128)
+                S_dB = librosa.power_to_db(S, ref=np.max)
+                img_cv2 = (255 * (S_dB - S_dB.min()) / (S_dB.max() - S_dB.min())).astype(np.uint8)
+                img_cv2 = np.flipud(img_cv2)
+                img_tensor = grad_cam.preprocess_image(img_cv2).to(device)
+
+                model.eval()
+                with torch.no_grad():
+                    preds = model(img_tensor)
+                class_index = preds.argmax(dim=1).item()
+
+                # Compute Grad-CAM heatmap
+                heatmap = grad_cam.compute_gradcam(model, img_tensor, class_index, conv_layer_name="cnn.features.7")
+
+                # Overlay heatmap on the original image
+                output_img = grad_cam.overlay_heatmap(img_cv2, heatmap)
+
+                st.subheader("Visualisation Grad-CAM")
+                st.image(output_img, use_container_width=True, caption=f"Analyse des zones temporelles et fréquentielles critiques")
+
                 fig_bar = px.bar(
                     df_preds, x='Probabilité (%)', y='Pathologie',
                     orientation='h', color='Pathologie',
