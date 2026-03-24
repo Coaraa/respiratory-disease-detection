@@ -1,11 +1,3 @@
-"""
-Génère les embeddings de référence (vecteurs 768-dim ConvNeXt) pour 3 fichiers
-par classe, puis calcule la moyenne par classe et sauvegarde dans
-models/reference_embeddings.npz.
-
-Usage :
-    python scripts/generate_references.py
-"""
 import sys
 import numpy as np
 import torch

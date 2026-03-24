@@ -168,7 +168,6 @@ def diagnostic_page():
 
     # Sidebar
     with st.sidebar:
-        st.subheader("Cabine Tessan")
         pharmacie_id = st.selectbox("Pharmacie", PHARMACIES)
 
         st.markdown("---")
@@ -189,112 +188,137 @@ def diagnostic_page():
                 del st.query_params["_sf"]
                 st.rerun()
 
-    # Main
-    st.title("Détection des Maladies Respiratoires")
-    st.markdown("**Analyse assistée par IA des sons respiratoires en cabine médicale**")
-    st.markdown("---")
-
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        st.header("1. Acquisition du son")
-        st.info("Simulez l'action du stéthoscope connecté de la cabine Tessan.")
-        uploaded_file = st.file_uploader("Chargez un enregistrement d'auscultation (.wav)", type=['wav'])
-
-        if uploaded_file is not None:
-            st.audio(uploaded_file, format='audio/wav')
-            with st.spinner('Extraction des caractéristiques audio...'):
-                audio, _ = librosa.load(uploaded_file, sr=SR)
-                audio_preprocessed = preprocess_audio(audio)
-                st.subheader("Signature Acoustique")
-                st.pyplot(plot_mel_spectrogram(audio_preprocessed))
-
-    with col2:
-        st.header("2. Pré-diagnostic IA")
-        if uploaded_file is not None:
-            if model is None:
-                st.error("Modèle non chargé.")
-            else:
-                with st.spinner('Analyse par le modèle en cours...'):
-                    predictions    = predict(audio_preprocessed, model, augmenter, device)
-                    classe_predite = max(predictions, key=predictions.get)
-                    confiance      = predictions[classe_predite]
-
-                st.metric(
-                    label="Diagnostic principal estimé",
-                    value=CLASS_MAP[classe_predite],
-                    delta=f"{confiance:.1%} de confiance"
-                )
-
-                df_preds = pd.DataFrame({
-                    'Pathologie':    [CLASS_MAP[c] for c in CLASSES],
-                    'Probabilité (%)': [predictions[c] * 100 for c in CLASSES]
-                })
-
-
-
-
-                # Grad-CAM pour expliquer la prédiction (optionnel, nécessite une image de spectrogramme)
-                S    = librosa.feature.melspectrogram(y=audio_preprocessed, sr=SR, n_fft=1024, hop_length=512, n_mels=128)
-                S_dB = librosa.power_to_db(S, ref=np.max)
-                img_cv2 = (255 * (S_dB - S_dB.min()) / (S_dB.max() - S_dB.min())).astype(np.uint8)
-                img_cv2 = np.flipud(img_cv2)
-                img_tensor = grad_cam.preprocess_image(img_cv2).to(device)
-
-                model.eval()
-                with torch.no_grad():
-                    preds = model(img_tensor)
-                class_index = preds.argmax(dim=1).item()
-
-                # Compute Grad-CAM heatmap
-                heatmap = grad_cam.compute_gradcam(model, img_tensor, class_index, conv_layer_name="cnn.features.7")
-
-                # Overlay heatmap on the original image
-                output_img = grad_cam.overlay_heatmap(img_cv2, heatmap)
-
-                st.subheader("Visualisation Grad-CAM")
-                st.image(output_img, use_container_width=True, caption=f"Analyse des zones temporelles et fréquentielles critiques")
-
-                fig_bar = px.bar(
-                    df_preds, x='Probabilité (%)', y='Pathologie',
-                    orientation='h', color='Pathologie',
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                fig_bar.update_layout(showlegend=False, yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(fig_bar, width='stretch')
-
-                st.subheader("Recommandation Clinique")
-                icon, level, msg = CLINICAL_RECS[classe_predite]
-                getattr(st, level)(f"{icon} {msg}")
-
-                # ── Comparaison avec sons de référence ───────────────────
-                refs = load_reference_embeddings()
-                if refs is not None:
-                    embedding = get_embedding(audio_preprocessed, model, augmenter, device)
-                    sims      = compare_to_references(embedding, refs)
-                    st.subheader("Comparaison avec sons de référence")
-                    df_sim = pd.DataFrame({
-                        'Pathologie':   [CLASS_MAP[c] for c in CLASSES],
-                        'Similarité (%)': [sims.get(c, 0) * 100 for c in CLASSES],
-                    })
-                    fig_sim = px.bar(
-                        df_sim, x='Similarité (%)', y='Pathologie',
-                        orientation='h',
-                        color='Pathologie',
-                        color_discrete_sequence=px.colors.qualitative.Set2,
-                    )
-                    fig_sim.update_layout(showlegend=False, yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig_sim, width='stretch')
-                    closest = max(sims, key=sims.get)
-                    st.caption(f"Son le plus proche du dataset de référence : **{CLASS_MAP[closest]}** ({sims[closest]:.0%} similarité normalisée)")
-
-                saved = insert_prediction(pharmacie_id, classe_predite, predictions, confiance)
-                if saved:
-                    st.caption("✅ Prédiction enregistrée dans Snowflake")
-                elif 'sf_conn' not in st.session_state:
-                    st.caption("⚠️ Non connecté à Snowflake — prédiction non sauvegardée")
-        else:
-            st.write("En attente de l'enregistrement du patient...")
+    # ── En-tête ───────────────────────────────────────────────────────────
+    st.title("Diagnostic Respiratoire")
 
     st.markdown("---")
-    st.caption("Hackathon Tessan x Snowflake | Pipeline de données et de déploiement sécurisé")
+
+    # ── Zone d'upload ─────────────────────────────────────────────────────
+    uploaded_file = st.file_uploader(
+        "Déposez un enregistrement d'auscultation (.wav)",
+        type=['wav'],
+        label_visibility='collapsed',
+    )
+
+    if uploaded_file is None:
+        st.info("En attente d'un enregistrement WAV.")
+        return
+
+    # ── Chargement + preprocessing ────────────────────────────────────────
+    with st.spinner('Prétraitement audio…'):
+        audio, _ = librosa.load(uploaded_file, sr=SR)
+        audio_preprocessed = preprocess_audio(audio)
+
+    st.audio(uploaded_file, format='audio/wav')
+    st.markdown("---")
+
+    if model is None:
+        st.error("Modèle non chargé.")
+        return
+
+    # ── Inférence + Grad-CAM ──────────────────────────────────────────────
+    with st.spinner('Analyse IA en cours…'):
+        predictions    = predict(audio_preprocessed, model, augmenter, device)
+        classe_predite = max(predictions, key=predictions.get)
+        confiance      = predictions[classe_predite]
+
+        S       = librosa.feature.melspectrogram(y=audio_preprocessed, sr=SR, n_fft=1024, hop_length=512, n_mels=128)
+        S_dB    = librosa.power_to_db(S, ref=np.max)
+        img_cv2 = (255 * (S_dB - S_dB.min()) / (S_dB.max() - S_dB.min())).astype(np.uint8)
+        img_cv2 = np.flipud(img_cv2)
+        img_tensor  = grad_cam.preprocess_image(img_cv2).to(device)
+        model.eval()
+        with torch.no_grad():
+            preds = model(img_tensor)
+        class_index = preds.argmax(dim=1).item()
+        heatmap     = grad_cam.compute_gradcam(model, img_tensor, class_index, conv_layer_name="cnn.features.7")
+        output_img  = grad_cam.overlay_heatmap(img_cv2, heatmap)
+
+    # ── Mise en page deux colonnes ────────────────────────────────────────
+    col_left, col_right = st.columns([1, 1], gap="large")
+
+    with col_left:
+        # Diagnostic principal
+        DISEASE_COLORS = {
+            'asthma': '#F59E0B', 'copd': '#EF4444', 'bronchial': '#8B5CF6',
+            'pneumonia': '#F97316', 'healthy': '#10B981',
+        }
+        color = DISEASE_COLORS.get(classe_predite, '#6B7280')
+        st.markdown(f"""
+        <div style="background:{color}18;border:1.5px solid {color}40;
+                    border-radius:12px;padding:20px 24px;margin-bottom:16px">
+            <div style="font-size:13px;color:#6B7280;font-weight:600;
+                        text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
+                Diagnostic principal
+            </div>
+            <div style="font-size:32px;font-weight:800;color:{color}">
+                {CLASS_MAP[classe_predite]}
+            </div>
+            <div style="font-size:15px;color:#374151;margin-top:4px">
+                Confiance : <b>{confiance:.1%}</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Recommandation clinique
+        icon, level, msg = CLINICAL_RECS[classe_predite]
+        getattr(st, level)(f"{icon} {msg}")
+
+        st.markdown("#### Probabilités par pathologie")
+        df_preds = pd.DataFrame({
+            'Pathologie':      [CLASS_MAP[c] for c in CLASSES],
+            'Probabilité (%)': [predictions[c] * 100 for c in CLASSES],
+        })
+        fig_bar = px.bar(
+            df_preds, x='Probabilité (%)', y='Pathologie',
+            orientation='h', color='Pathologie',
+            color_discrete_map={CLASS_MAP[k]: v for k, v in DISEASE_COLORS.items()},
+        )
+        fig_bar.update_layout(
+            showlegend=False,
+            yaxis={'categoryorder': 'total ascending'},
+            margin=dict(l=0, r=0, t=0, b=0),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            height=220,
+        )
+        st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
+
+        # Similarité de référence
+        refs = load_reference_embeddings()
+        if refs is not None:
+            embedding = get_embedding(audio_preprocessed, model, augmenter, device)
+            sims      = compare_to_references(embedding, refs)
+            st.markdown("#### Similarité avec le dataset de référence")
+            df_sim = pd.DataFrame({
+                'Pathologie':     [CLASS_MAP[c] for c in CLASSES],
+                'Similarité (%)': [sims.get(c, 0) * 100 for c in CLASSES],
+            })
+            fig_sim = px.bar(
+                df_sim, x='Similarité (%)', y='Pathologie',
+                orientation='h', color='Pathologie',
+                color_discrete_map={CLASS_MAP[k]: v for k, v in DISEASE_COLORS.items()},
+            )
+            fig_sim.update_layout(
+                showlegend=False,
+                yaxis={'categoryorder': 'total ascending'},
+                margin=dict(l=0, r=0, t=0, b=0),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=220,
+            )
+            st.plotly_chart(fig_sim, use_container_width=True, config={'displayModeBar': False})
+        insert_prediction(pharmacie_id, classe_predite, predictions, confiance)
+
+    with col_right:
+        st.markdown("#### Spectrogramme Mel")
+        fig_mel, ax = plt.subplots(figsize=(6, 2.8))
+        img = librosa.display.specshow(S_dB, x_axis='time', y_axis='mel', sr=SR, ax=ax, cmap='magma')
+        fig_mel.colorbar(img, ax=ax, format='%+2.0f dB')
+        ax.set_title('')
+        plt.tight_layout(pad=0.5)
+        st.pyplot(fig_mel, use_container_width=True)
+
+        st.markdown("#### Grad-CAM")
+        st.image(output_img, use_container_width=True,
+                 caption="Régions fréquentielles et temporelles activant le diagnostic")
