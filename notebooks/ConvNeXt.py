@@ -43,9 +43,9 @@ class Dataset(Dataset):
 
 
 class RespiratoryModel(nn.Module):
-    def __init__(self, num_classes=5):
+    def __init__(self, num_classes=5, weights="DEFAULT"):
         super().__init__()
-        self.cnn = convnext_tiny(weights="DEFAULT")
+        self.cnn = convnext_tiny(weights=weights)
         
         # Adaptation 1 canal
         old_conv = self.cnn.features[0][0]

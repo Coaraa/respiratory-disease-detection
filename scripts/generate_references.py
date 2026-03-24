@@ -9,33 +9,13 @@ Usage :
 import sys
 import numpy as np
 import torch
-import torch.nn as nn
 import librosa
 from pathlib import Path
 from scipy.signal import butter, filtfilt
-from torchvision.models import convnext_tiny
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / 'notebooks'))
-from ConvNeXt import GPUAugmenter
-
-# ── Architecture (identique à diagnostic_page.py) ──────────────────────────
-class RespiratoryModel(nn.Module):
-    def __init__(self, num_classes=5):
-        super().__init__()
-        self.cnn = convnext_tiny(weights=None)
-        old_conv = self.cnn.features[0][0]
-        self.cnn.features[0][0] = nn.Conv2d(1, old_conv.out_channels, kernel_size=4, stride=4)
-        self.cnn.classifier = nn.Identity()
-        self.classifier = nn.Sequential(
-            nn.LayerNorm((768, 1, 1), eps=1e-6),
-            nn.Flatten(1),
-            nn.Linear(768, 256), nn.ReLU(), nn.Dropout(0.2),
-            nn.Linear(256, 64),  nn.ReLU(), nn.Dropout(0.2),
-            nn.Linear(64, num_classes)
-        )
-    def forward(self, spec):
-        return self.classifier(self.cnn(spec))
+from ConvNeXt import GPUAugmenter, RespiratoryModel
 
 # ── Constantes ──────────────────────────────────────────────────────────────
 SR         = 22050
@@ -84,7 +64,7 @@ def main():
     pth_path  = ROOT / 'models' / 'best_model_convnext.pth'
 
     print(f"Chargement du modèle ({device})...")
-    model     = RespiratoryModel(num_classes=5).to(device)
+    model     = RespiratoryModel(num_classes=5, weights=None).to(device)
     augmenter = GPUAugmenter().to(device)
     model.load_state_dict(torch.load(pth_path, map_location=device))
     model.eval()
