@@ -4,7 +4,7 @@ import json
 import cv2
 import numpy as np
 import torch
-import torch.nn as nn  # noqa: F401 — utilisé par ConvNeXt.py importé ci-dessous
+import torch.nn as nn  
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -27,9 +27,9 @@ from snowflake_conn import get_snowflake_connection
 
 load_dotenv(Path(__file__).parent.parent.parent / '.env')
 
-# ── Constantes audio (identiques à data_preprocess.ipynb) ──────────────────
+# Constantes audio
 SR         = 22050
-TARGET_LEN = SR * 6  # 132 300 samples — 6 secondes
+TARGET_LEN = SR * 6  # 132 300 samples
 CLASSES    = ['asthma', 'bronchial', 'copd', 'healthy', 'pneumonia']
 CLASS_MAP  = {
     'asthma':    'Asthme',
@@ -50,7 +50,7 @@ CLINICAL_RECS = {
     'pneumonia': ("🚨", "error",   "Suspicion de pneumonie. Consultation médicale urgente et radiographie pulmonaire recommandées."),
 }
 
-# ── Preprocessing (identique à data_preprocess.ipynb) ──────────────────────
+# Preprocessing
 def bandpass_filter(audio, lowcut=100, highcut=2000, sr=SR, order=4):
     nyquist = sr / 2
     b, a = butter(order, [lowcut / nyquist, highcut / nyquist], btype='band')
@@ -69,10 +69,9 @@ def preprocess_audio(audio):
     """Pipeline : trim → bandpass 100-2000 Hz → normalise → pad/crop 6s."""
     audio, _ = librosa.effects.trim(audio, top_db=20)
     audio = bandpass_filter(audio)
-    #audio = audio / (np.max(np.abs(audio)) + 1e-8)
     return pad_or_crop(audio)
 
-# ── Chargement modèle (mis en cache) ───────────────────────────────────────
+# Chargement modèle 
 @st.cache_resource
 def load_model():
     device    = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -87,7 +86,7 @@ def load_model():
     augmenter.eval()
     return model, augmenter, device
 
-# ── Inférence ──────────────────────────────────────────────────────────────
+# Inférence 
 def predict(audio_array, model, augmenter, device):
     tensor = torch.tensor(audio_array, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
     with torch.no_grad():
@@ -96,15 +95,15 @@ def predict(audio_array, model, augmenter, device):
         probs   = torch.nn.functional.softmax(outputs, dim=1).cpu().numpy()[0]
     return dict(zip(CLASSES, probs.tolist()))
 
+# Chargement des embeddings 
 def get_embedding(audio_array, model, augmenter, device):
-    """Vecteur 768-dim ConvNeXt (avant la tête de classification)."""
     tensor = torch.tensor(audio_array, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
     with torch.no_grad():
         spec     = augmenter(tensor, augment=False)
-        features = model.cnn(spec)                   # (1, 768, 1, 1)
-        return features.squeeze().cpu().numpy()      # (768,)
+        features = model.cnn(spec)                   
+        return features.squeeze().cpu().numpy()      
 
-# ── Embeddings de référence ─────────────────────────────────────────────────
+# Embeddings de référence
 @st.cache_resource
 def load_reference_embeddings():
     npz_path = Path(__file__).parent.parent.parent / 'models' / 'reference_embeddings.npz'
@@ -117,9 +116,7 @@ def cosine_similarity(a, b):
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8))
 
 def compare_to_references(embedding, refs):
-    """Retourne un dict {classe: similarité 0-100%} normalisé."""
     sims  = {cls: cosine_similarity(embedding, refs[cls]) for cls in CLASSES if cls in refs}
-    # Normalise [min,max] → [0,1] pour affichage lisible
     lo, hi = min(sims.values()), max(sims.values())
     span  = hi - lo if hi > lo else 1.0
     return {cls: (v - lo) / span for cls, v in sims.items()}
@@ -131,7 +128,7 @@ def get_sf_connection():
         return get_snowflake_connection(totp)
     return None
 
-# ── Insert Snowflake ────────────────────────────────────────────────────────
+# Insert Snowflake
 def insert_prediction(pharmacie_id, classe_predite, probabilites_dict, confiance):
     conn = get_sf_connection()
     if conn is None:
@@ -151,7 +148,7 @@ def insert_prediction(pharmacie_id, classe_predite, probabilites_dict, confiance
         st.warning(f"Snowflake insert échoué : {e}")
         return False
 
-# ── Spectrogramme Mel ───────────────────────────────────────────────────────
+# Spectrogramme Mel 
 def plot_mel_spectrogram(audio):
     fig, ax = plt.subplots(figsize=(10, 3))
     S    = librosa.feature.melspectrogram(y=audio, sr=SR, n_fft=1024, hop_length=512, n_mels=128)
@@ -162,7 +159,7 @@ def plot_mel_spectrogram(audio):
     plt.tight_layout()
     return fig
 
-# ── Page principale ─────────────────────────────────────────────────────────
+# Page principale
 def diagnostic_page():
     model, augmenter, device = load_model()
 
@@ -177,8 +174,8 @@ def diagnostic_page():
             totp = st.text_input("Code MFA (6 chiffres)", max_chars=6, type="password")
             if st.button("Connecter") and totp:
                 try:
-                    get_snowflake_connection(totp)     # met en cache partagé
-                    st.query_params["_sf"] = totp      # persiste dans l'URL
+                    get_snowflake_connection(totp)     
+                    st.query_params["_sf"] = totp     
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Connexion échouée : {e}")
@@ -188,12 +185,12 @@ def diagnostic_page():
                 del st.query_params["_sf"]
                 st.rerun()
 
-    # ── En-tête ───────────────────────────────────────────────────────────
+   
     st.title("Diagnostic Respiratoire")
 
     st.markdown("---")
 
-    # ── Zone d'upload ─────────────────────────────────────────────────────
+    # Zone d'upload 
     uploaded_file = st.file_uploader(
         "Déposez un enregistrement d'auscultation (.wav)",
         type=['wav'],
@@ -204,7 +201,7 @@ def diagnostic_page():
         st.info("En attente d'un enregistrement WAV.")
         return
 
-    # ── Chargement + preprocessing ────────────────────────────────────────
+    # Chargement et preprocessing 
     with st.spinner('Prétraitement audio…'):
         audio, _ = librosa.load(uploaded_file, sr=SR)
         audio_preprocessed = preprocess_audio(audio)
@@ -216,7 +213,7 @@ def diagnostic_page():
         st.error("Modèle non chargé.")
         return
 
-    # ── Inférence + Grad-CAM ──────────────────────────────────────────────
+    # Inférence et Grad-CAM 
     with st.spinner('Analyse IA en cours…'):
         predictions    = predict(audio_preprocessed, model, augmenter, device)
         classe_predite = max(predictions, key=predictions.get)
@@ -234,7 +231,7 @@ def diagnostic_page():
         heatmap     = grad_cam.compute_gradcam(model, img_tensor, class_index, conv_layer_name="cnn.features.7")
         output_img  = grad_cam.overlay_heatmap(img_cv2, heatmap)
 
-    # ── Mise en page deux colonnes ────────────────────────────────────────
+    # Mise en page deux colonnes 
     col_left, col_right = st.columns([1, 1], gap="large")
 
     with col_left:

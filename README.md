@@ -14,8 +14,6 @@ Notre projet est un système d'intelligence artificielle conçu pour détecter d
 * **Explicabilité médicale** : Mise en évidence des zones du spectrogramme (via Grad-CAM ou SHAP) qui ont été déterminantes pour justifier la prédiction du modèle.
 * **Surveillance épidémiologique** : Sauvegarde des prédictions dans Snowflake pour créer un tableau de bord capable de détecter des pics de maladies par région.
 
-## 🚀 Lancement du projet
-
 ## 👥 Auteurs
 
 - LEFEVRE Victor

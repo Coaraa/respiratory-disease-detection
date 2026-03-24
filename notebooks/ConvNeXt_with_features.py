@@ -5,7 +5,6 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from torchvision.models import convnext_tiny
 
-
 class GPUAugmenter(nn.Module):
     def __init__(self, sr=22050):
         super().__init__()
@@ -68,7 +67,7 @@ class RespiratoryFusionModel(nn.Module):
             nn.Dropout(0.2)
         )
 
-        # Classifieur Final (Fusion du CNN et du MLP)
+        # Fusion du CNN et du MLP
         self.final_classifier = nn.Sequential(
             nn.Linear(832, 256),
             nn.ReLU(),
@@ -127,7 +126,7 @@ def train_model(model, train_loader, val_loader, augmenter, criterion, scaler, p
 
                 optimizer.zero_grad(set_to_none=True)
                 with torch.amp.autocast('cuda'):
-                    # Augmentation GPU !
+                    # Augmentation GPU
                     specs = augmenter(audios, augment=(not p_info['freeze']))
                     outputs = model(specs, feats)
                     loss = criterion(outputs, labels)
@@ -176,12 +175,12 @@ def get_predictions(model, X_test, X_features_test, y_test, augmenter, device):
 
     with torch.no_grad():
         for audios, feats, labels in test_loader:
-            # On envoie l'audio brut sur la 4070
+            # On envoie l'audio brut
             audios = audios.to(device, non_blocking=True)
             feats = feats.to(device, non_blocking=True)
             
             with torch.amp.autocast('cuda'):
-                # Transformation en Spectrogramme sur GPU (sans augmentation)
+                # Transformation en Spectrogramme sur GPU sans augmentation
                 specs = augmenter(audios, augment=False)
                 
                 # Prédiction du modèle

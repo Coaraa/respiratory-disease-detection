@@ -12,7 +12,7 @@ ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from snowflake_conn import get_snowflake_connection
 
-# Mapping classes anglais (Snowflake) → français (dashboard)
+# Mapping classes anglais 
 CLASS_MAP = {
     'asthma':    'Asthme',
     'bronchial': 'Bronchite',
@@ -28,12 +28,11 @@ DISEASE_COLORS = {
     'Pneumonie': '#F97316',
     'Sain':      '#10B981',
 }
-# Couleurs Folium (hex sans #)
+
 DISEASE_COLORS_HEX = {k: v for k, v in DISEASE_COLORS.items()}
 
 CLASSES_FR = ['Asthme', 'BPCO', 'Bronchite', 'Pneumonie', 'Sain']
 
-# Icône Folium par maladie (couleur Bootstrap)
 FOLIUM_ICON_COLOR = {
     'Asthme':    'orange',
     'BPCO':      'red',
@@ -42,19 +41,15 @@ FOLIUM_ICON_COLOR = {
     'Sain':      'green',
 }
 
-
 @st.cache_data
 def load_pharmacies():
     df = pd.read_csv(ROOT / 'tessan_pharmacies.csv', encoding='utf-8-sig')
     df['DEP_CODE'] = df['DEPARTEMENT'].astype(str).str.strip().str.zfill(2)
     return df
 
-
-
 def build_folium_map(df, disease_filter):
-    """Carte Folium : choroplèthe département + clusters pharmacies."""
 
-    # ── Agrégation par département ────────────────────────────────────────
+    # Agrégation par département
     dep_counts = df.groupby(['DEP_CODE', 'classe_predite']).size().reset_index(name='cas')
     dep_total  = df.groupby('DEP_CODE').size().reset_index(name='total')
     dominant = (
@@ -71,10 +66,10 @@ def build_folium_map(df, disease_filter):
         dep_agg = dep_agg.merge(sub, on='DEP_CODE', how='left')
         dep_agg[col] = dep_agg[col].fillna(0).astype(int)
 
-    # ── GeoJSON départements ──────────────────────────────────────────────
+    # GeoJSON départements
     geojson = load_geojson()
 
-    # ── Carte Folium ──────────────────────────────────────────────────────
+    # Carte Folium
     m = folium.Map(
         location=[46.5, 2.5],
         zoom_start=6,
@@ -89,7 +84,7 @@ def build_folium_map(df, disease_filter):
 
     # Choroplèthe
     if disease_filter == 'Tous':
-        # Convertit dominante → couleur pour le style
+        # Convertit dominante 
         dep_color_map = dep_agg.set_index('DEP_CODE')['dominante'].to_dict()
 
         def style_dominant(feature):
@@ -141,7 +136,7 @@ def build_folium_map(df, disease_filter):
             name=f'Cas {disease_filter}',
         ).add_to(m)
 
-    # ── Légende colorée ───────────────────────────────────────────────────
+    # Légende colorée 
     if disease_filter == 'Tous':
         legend_html = """
         <div style="position:fixed;bottom:30px;left:30px;z-index:1000;
@@ -158,7 +153,7 @@ def build_folium_map(df, disease_filter):
         legend_html += '</div>'
         m.get_root().html.add_child(folium.Element(legend_html))
 
-    # ── Clusters pharmacies ───────────────────────────────────────────────
+    # Clusters pharmacies
     pharm_stats = (
         df.groupby(['PHARMACIE_ID', 'NOM', 'VILLE'])
         .agg(
@@ -193,7 +188,7 @@ def build_folium_map(df, disease_filter):
         dom_color  = DISEASE_COLORS.get(dominant, '#94A3B8')
         total      = row['total']
 
-        # ── Barres de répartition ─────────────────────────────────────────
+        # Barres de répartition
         bars_html = ''
         for d in CLASSES_FR:
             cnt   = row[d]
@@ -268,12 +263,10 @@ def build_folium_map(df, disease_filter):
     folium.LayerControl().add_to(m)
     return m
 
-
 @st.cache_data
 def load_geojson():
     url = 'https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson'
     return requests.get(url, timeout=10).json()
-
 
 @st.cache_data(ttl=300, show_spinner="Chargement depuis Snowflake…")
 def load_predictions_sf(totp: str, days: int) -> pd.DataFrame | None:
@@ -329,7 +322,7 @@ PERIOD_OPTIONS = {
 def dashboard_page():
     pharmacies_df = load_pharmacies()
 
-    # ── Sidebar : connexion Snowflake uniquement ──────────────────────────
+    # Sidebar : connexion Snowflake 
     with st.sidebar:
         st.subheader("🔌 Snowflake")
         if "_sf" not in st.query_params:
@@ -347,7 +340,7 @@ def dashboard_page():
                 del st.query_params["_sf"]
                 st.rerun()
 
-    # ── Chargement des données Snowflake ─────────────────────────────────
+    # Chargement des données Snowflake
     totp = st.query_params.get("_sf")
     if not totp:
         st.title("Tableau de Bord Épidémiologique")
@@ -355,10 +348,10 @@ def dashboard_page():
         st.stop()
 
     st.title("Tableau de Bord Épidémiologique")
-    st.caption(f"Réseau Tessan · {len(pharmacies_df):,} cabines actives · données Snowflake en direct")
+    st.caption(f"Réseau Tessan · {len(pharmacies_df):,} cabines actives · Données Snowflake en direct")
     st.markdown("---")
 
-    # ── Sélecteur de période ──────────────────────────────────────────────
+    # Sélecteur de période 
     period_label = st.pills(
         "Période d'analyse",
         options=list(PERIOD_OPTIONS.keys()),
@@ -374,7 +367,7 @@ def dashboard_page():
 
     st.markdown("---")
 
-    # ── KPIs ──────────────────────────────────────────────────────────────
+    # KPIs 
     _, k1, k2, k3, k4, _ = st.columns([1, 2, 2, 2, 2, 1])
     k1.metric("Analyses",                      f"{len(df):,}")
     k2.metric("Cas graves (BPCO + Pneumonie)", f"{len(df[df['classe_predite'].isin(['Pneumonie','BPCO'])]):,}")
@@ -383,7 +376,7 @@ def dashboard_page():
 
     st.markdown("---")
 
-    # ── Carte ─────────────────────────────────────────────────────────────
+    # Carte 
     st.subheader("Carte épidémiologique par département")
 
     disease_filter = st.pills(
@@ -398,7 +391,7 @@ def dashboard_page():
 
     st.markdown("---")
 
-    # ── Évolution + Répartition ───────────────────────────────────────────
+    # Évolution + Répartition
     col1, col2 = st.columns([3, 2])
 
     with col1:
@@ -438,7 +431,7 @@ def dashboard_page():
         )
         st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
 
-    # ── Top départements (barres empilées) ───────────────────────────────
+    # Top départements barres empilées 
     st.subheader("Départements les plus actifs")
 
     geojson = load_geojson()

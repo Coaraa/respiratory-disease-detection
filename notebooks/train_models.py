@@ -52,7 +52,6 @@ def preparation_donnees(directory):
     return X_train, X_features_train, y_train, X_val, X_features_val, y_val, X_test, X_features_test, y_test, le
 
 
-
 def evaluate_model(y_test, y_test_pred, y_test_proba, le, afficher_resultats=True):
     if not afficher_resultats:
         accuracy = accuracy_score(y_test, y_test_pred)
@@ -215,9 +214,8 @@ def run_model(nom_model, directory, device, afficher_resultats=True):
 
 if __name__ == "__main__":
 
-    directory = "C:/Users/lrozier/Documents/UQAC/respiratory-disease-detection/data/processed/"
+    directory = "../data/processed/"
 
-    # Configuration RTX 4070 : Tensor Cores (TF32)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 

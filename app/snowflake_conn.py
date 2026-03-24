@@ -5,7 +5,6 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent.parent / '.env')
 
-
 @st.cache_resource(show_spinner=False)
 def get_snowflake_connection(totp: str):
     """Connexion Snowflake partagée entre toutes les pages (cache unique)."""

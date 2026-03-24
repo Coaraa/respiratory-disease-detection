@@ -9,7 +9,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / 'notebooks'))
 from ConvNeXt import GPUAugmenter, RespiratoryModel
 
-# ── Constantes ──────────────────────────────────────────────────────────────
+#  Constantes 
 SR         = 22050
 TARGET_LEN = SR * 6
 N_REFS     = 3   # fichiers par classe pour la moyenne
@@ -22,7 +22,7 @@ CLASS_TO_FOLDER = {
     'pneumonia': 'pneumonia',
 }
 
-# ── Preprocessing ────────────────────────────────────────────────────────────
+# Preprocessing 
 def bandpass_filter(audio, lowcut=100, highcut=2000, sr=SR, order=4):
     nyq = sr / 2
     b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
@@ -42,7 +42,7 @@ def preprocess_audio(audio):
     audio = audio / (np.max(np.abs(audio)) + 1e-8)
     return pad_or_crop(audio)
 
-# ── Extraction embedding (avant la tête de classification) ──────────────────
+# Extraction embedding avant la tête de classification
 def get_embedding(audio_array, model, augmenter, device):
     tensor = torch.tensor(audio_array, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
     with torch.no_grad():
@@ -50,7 +50,7 @@ def get_embedding(audio_array, model, augmenter, device):
         features = model.cnn(spec)                     # (1, 768, 1, 1)
         return features.squeeze().cpu().numpy()        # (768,)
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# Main 
 def main():
     device    = 'cuda' if torch.cuda.is_available() else 'cpu'
     pth_path  = ROOT / 'models' / 'best_model_convnext.pth'

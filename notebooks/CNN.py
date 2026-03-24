@@ -56,14 +56,11 @@ class CNNBaseline(nn.Module):
 
     def forward(self, x): return self.classifier(self.features(x))
 
-
-
 def load_data(X_train, y_train, X_val, y_val, device):
     augmenter = GPUAugmenter(sr=22050).to(device)
     train_loader = DataLoader(Dataset(X_train, y_train), batch_size=64, shuffle=True, pin_memory=True)
     val_loader = DataLoader(Dataset(X_val, y_val), batch_size=64, pin_memory=True)
     return train_loader, val_loader, augmenter
-
 
 def model_setup(le, device, y_train):    
 
@@ -80,8 +77,6 @@ def model_setup(le, device, y_train):
 
     return model, criterion, scaler, best_acc, history
 
-
-
 def train_model(model, train_loader, val_loader, augmenter, criterion, scaler, best_acc, history, device):
 
         
@@ -97,7 +92,7 @@ def train_model(model, train_loader, val_loader, augmenter, criterion, scaler, b
 
             optimizer.zero_grad(set_to_none=True)
             with torch.amp.autocast('cuda'):
-                # Augmentation GPU !
+                # Augmentation GPU
                 specs = augmenter(audios, augment=True)
                 outputs = model(specs)
                 loss = criterion(outputs, labels)
@@ -131,7 +126,6 @@ def train_model(model, train_loader, val_loader, augmenter, criterion, scaler, b
     
     return model, history
 
-
 def get_predictions(model, X_test, y_test, augmenter, device):
     test_loader = DataLoader(Dataset(X_test, y_test), batch_size=64, shuffle=False, pin_memory=True)
 
@@ -139,21 +133,18 @@ def get_predictions(model, X_test, y_test, augmenter, device):
         model = CNNBaseline(num_classes=len(torch.le.classes_)).to(device)
         model.load_state_dict(torch.load("../models/best_model_cnn.pth"))
 
-    # Faire les prédictions sur le test set
     model.eval()
     y_test_pred = []
     y_test_proba = []
 
     with torch.no_grad():
         for audios, labels in test_loader:
-            # On envoie l'audio brut sur la 4070
             audios = audios.to(device, non_blocking=True)
             
             with torch.amp.autocast('cuda'):
-                # Transformation en Spectrogramme sur GPU (sans augmentation)
+                # Transformation en Spectrogramme sur GPU sans augmentation
                 specs = augmenter(audios, augment=False)
                 
-                # Prédiction du modèle
                 outputs = model(specs)
                 
             proba = torch.nn.functional.softmax(outputs, dim=1)

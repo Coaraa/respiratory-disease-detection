@@ -6,7 +6,6 @@ import os
 path = kagglehub.dataset_download("mohammedtawfikmusaed/asthma-detection-dataset-version-2")
 print("Dataset téléchargé :", path)
 
-# Le dataset est dans : path/Asthma Detection Dataset Version 2/Asthma Detection Dataset Version 2/
 inner = os.path.join(path, "Asthma Detection Dataset Version 2", "Asthma Detection Dataset Version 2")
 
 # Dossier data/ à la racine du projet
