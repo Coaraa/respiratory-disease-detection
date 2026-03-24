@@ -33,7 +33,10 @@ snowflake-snowpark-python
 # Interface
 streamlit
 plotly
+folium
+streamlit-folium
 blinker
+
 
 # Data download
 kagglehub

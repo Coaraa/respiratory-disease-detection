@@ -4,7 +4,7 @@ import json
 import cv2
 import numpy as np
 import torch
-import torch.nn as nn
+import torch.nn as nn  # noqa: F401 — utilisé par ConvNeXt.py importé ci-dessous
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -13,7 +13,6 @@ import pandas as pd
 import streamlit as st
 from pathlib import Path
 from scipy.signal import butter, filtfilt
-from torchvision.models import convnext_tiny
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'app' / 'views'))
@@ -22,25 +21,9 @@ import grad_cam
 
 # GPUAugmenter importé depuis notebooks/ConvNeXt.py
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'notebooks'))
-from ConvNeXt import GPUAugmenter
-
-# RespiratoryModel avec weights=None — pas de téléchargement, on charge notre .pth
-class RespiratoryModel(nn.Module):
-    def __init__(self, num_classes=5):
-        super().__init__()
-        self.cnn = convnext_tiny(weights=None)
-        old_conv = self.cnn.features[0][0]
-        self.cnn.features[0][0] = nn.Conv2d(1, old_conv.out_channels, kernel_size=4, stride=4)
-        self.cnn.classifier = nn.Identity()
-        self.classifier = nn.Sequential(
-            nn.LayerNorm((768, 1, 1), eps=1e-6),
-            nn.Flatten(1),
-            nn.Linear(768, 256), nn.ReLU(), nn.Dropout(0.2),
-            nn.Linear(256, 64),  nn.ReLU(), nn.Dropout(0.2),
-            nn.Linear(64, num_classes)
-        )
-    def forward(self, spec):
-        return self.classifier(self.cnn(spec))
+from ConvNeXt import GPUAugmenter, RespiratoryModel
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from snowflake_conn import get_snowflake_connection
 
 load_dotenv(Path(__file__).parent.parent.parent / '.env')
 
@@ -61,7 +44,7 @@ PHARMACIES = [
 ]
 CLINICAL_RECS = {
     'asthma':    ("⚠️", "warning", "Suspicion d'asthme (sifflements détectés). Consultation médicale recommandée pour confirmation et prescription éventuelle de bronchodilatateurs."),
-    'bronchial': ("⚠️", "warning", "Suspicion de syndrome bronchique. Bilan ORL/pulmonaire conseillé."),
+    'bronchial': ("⚠️", "warning", "Suspicion de syndrome bronchite. Bilan ORL/pulmonaire conseillé."),
     'copd':      ("🚨", "error",   "Suspicion de BPCO. Examen spirométrique urgent recommandé."),
     'healthy':   ("✅", "success", "Murmure vésiculaire régulier. Aucune anomalie respiratoire majeure détectée."),
     'pneumonia': ("🚨", "error",   "Suspicion de pneumonie. Consultation médicale urgente et radiographie pulmonaire recommandées."),
@@ -97,7 +80,7 @@ def load_model():
     if not pth_path.exists():
         st.error(f"Modèle introuvable : {pth_path}")
         return None, None, device
-    model     = RespiratoryModel(num_classes=5).to(device)
+    model     = RespiratoryModel(num_classes=5, weights=None).to(device)
     augmenter = GPUAugmenter().to(device)
     model.load_state_dict(torch.load(pth_path, map_location=device))
     model.eval()
@@ -141,27 +124,11 @@ def compare_to_references(embedding, refs):
     span  = hi - lo if hi > lo else 1.0
     return {cls: (v - lo) / span for cls, v in sims.items()}
 
-# ── Connexion Snowflake (cache serveur — survive aux navigations) ───────────
-@st.cache_resource(show_spinner=False)
-def _make_sf_connection(totp: str):
-    import snowflake.connector
-    return snowflake.connector.connect(
-        account       = os.environ['SNOWFLAKE_ACCOUNT'],
-        user          = os.environ['SNOWFLAKE_USER'],
-        password      = os.environ['SNOWFLAKE_PASSWORD'],
-        authenticator = 'username_password_mfa',
-        passcode      = totp,
-        warehouse     = os.environ['SNOWFLAKE_WAREHOUSE'],
-        database      = os.environ['SNOWFLAKE_DATABASE'],
-        schema        = os.environ['SNOWFLAKE_SCHEMA'],
-        role          = os.environ['SNOWFLAKE_ROLE'],
-    )
-
 def get_sf_connection():
-    """Récupère la connexion depuis le cache via le TOTP stocké dans l'URL."""
+    """Récupère la connexion partagée via le TOTP stocké dans l'URL."""
     totp = st.query_params.get("_sf")
     if totp:
-        return _make_sf_connection(totp)
+        return get_snowflake_connection(totp)
     return None
 
 # ── Insert Snowflake ────────────────────────────────────────────────────────
@@ -171,10 +138,11 @@ def insert_prediction(pharmacie_id, classe_predite, probabilites_dict, confiance
         return False
     try:
         cursor = conn.cursor()
+        import uuid
         cursor.execute(
-            "INSERT INTO PREDICTIONS (PHARMACIE_ID, CLASSE_PREDITE, PROBABILITES, CONFIANCE) "
-            "SELECT %s, %s, PARSE_JSON(%s), %s",
-            (pharmacie_id, classe_predite, json.dumps(probabilites_dict), float(confiance))
+            "INSERT INTO PREDICTIONS (PREDICTION_ID, PHARMACIE_ID, CLASSE_PREDITE, PROBABILITES, CONFIANCE) "
+            "SELECT %s, %s, %s, PARSE_JSON(%s), %s",
+            (str(uuid.uuid4()), pharmacie_id, classe_predite, json.dumps(probabilites_dict), float(confiance))
         )
         conn.commit()
         cursor.close()
@@ -210,7 +178,7 @@ def diagnostic_page():
             totp = st.text_input("Code MFA (6 chiffres)", max_chars=6, type="password")
             if st.button("Connecter") and totp:
                 try:
-                    _make_sf_connection(totp)          # met en cache
+                    get_snowflake_connection(totp)     # met en cache partagé
                     st.query_params["_sf"] = totp      # persiste dans l'URL
                     st.rerun()
                 except Exception as e:
