@@ -10,36 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from snowflake_conn import get_snowflake_connection
-
-# Mapping classes anglais 
-CLASS_MAP = {
-    'asthma':    'Asthme',
-    'bronchial': 'Bronchite',
-    'copd':      'BPCO',
-    'healthy':   'Sain',
-    'pneumonia': 'Pneumonie',
-}
-
-DISEASE_COLORS = {
-    'Asthme':    '#F59E0B',
-    'BPCO':      '#EF4444',
-    'Bronchite': '#8B5CF6',
-    'Pneumonie': '#F97316',
-    'Sain':      '#10B981',
-}
-
-DISEASE_COLORS_HEX = {k: v for k, v in DISEASE_COLORS.items()}
-
-CLASSES_FR = ['Asthme', 'BPCO', 'Bronchite', 'Pneumonie', 'Sain']
-
-FOLIUM_ICON_COLOR = {
-    'Asthme':    'orange',
-    'BPCO':      'red',
-    'Bronchite': 'purple',
-    'Pneumonie': 'darkred',
-    'Sain':      'green',
-}
+from config import CLASS_MAP, CLASSES_FR, DISEASE_COLORS, FOLIUM_ICON_COLOR
+from snowflake_conn import get_snowflake_connection, render_snowflake_sidebar
 
 @st.cache_data
 def load_pharmacies():
@@ -322,23 +294,8 @@ PERIOD_OPTIONS = {
 def dashboard_page():
     pharmacies_df = load_pharmacies()
 
-    # Sidebar : connexion Snowflake 
     with st.sidebar:
-        st.subheader("🔌 Snowflake")
-        if "_sf" not in st.query_params:
-            totp = st.text_input("Code MFA (6 chiffres)", max_chars=6, type="password")
-            if st.button("Connecter") and totp:
-                try:
-                    get_snowflake_connection(totp)
-                    st.query_params["_sf"] = totp
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {e}")
-        else:
-            st.success("✅ Connecté")
-            if st.button("Déconnecter"):
-                del st.query_params["_sf"]
-                st.rerun()
+        render_snowflake_sidebar()
 
     # Chargement des données Snowflake
     totp = st.query_params.get("_sf")
@@ -387,7 +344,7 @@ def dashboard_page():
     )
 
     fmap = build_folium_map(df, disease_filter)
-    st_folium(fmap, use_container_width=True, height=620, returned_objects=[])
+    st_folium(fmap, width='stretch', height=620, returned_objects=[])
 
     st.markdown("---")
 
@@ -412,7 +369,7 @@ def dashboard_page():
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
         )
-        st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_trend, width='stretch', config={'displayModeBar': False})
 
     with col2:
         st.subheader("Répartition")
@@ -429,7 +386,7 @@ def dashboard_page():
             margin=dict(l=40, r=40, t=40, b=40),
             paper_bgcolor='rgba(0,0,0,0)',
         )
-        st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_pie, width='stretch', config={'displayModeBar': False})
 
     # Top départements barres empilées 
     st.subheader("Départements les plus actifs")
@@ -461,4 +418,4 @@ def dashboard_page():
         plot_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(type='category', tickangle=-35),
     )
-    st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
+    st.plotly_chart(fig_bar, width='stretch', config={'displayModeBar': False})

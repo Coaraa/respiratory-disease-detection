@@ -5,6 +5,7 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent.parent / '.env')
 
+
 @st.cache_resource(show_spinner=False)
 def get_snowflake_connection(totp: str):
     """Connexion Snowflake partagée entre toutes les pages (cache unique)."""
@@ -20,3 +21,22 @@ def get_snowflake_connection(totp: str):
         schema        = os.environ['SNOWFLAKE_SCHEMA'],
         role          = os.environ['SNOWFLAKE_ROLE'],
     )
+
+
+def render_snowflake_sidebar():
+    """Bloc sidebar connexion Snowflake MFA — partagé entre toutes les pages."""
+    st.subheader("🔌 Snowflake")
+    if "_sf" not in st.query_params:
+        totp = st.text_input("Code MFA (6 chiffres)", max_chars=6, type="password")
+        if st.button("Connecter") and totp:
+            try:
+                get_snowflake_connection(totp)
+                st.query_params["_sf"] = totp
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ {e}")
+    else:
+        st.success("✅ Connecté")
+        if st.button("Déconnecter"):
+            del st.query_params["_sf"]
+            st.rerun()

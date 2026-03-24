@@ -130,8 +130,7 @@ def get_predictions(model, X_test, y_test, augmenter, device):
     test_loader = DataLoader(Dataset(X_test, y_test), batch_size=64, shuffle=False, pin_memory=True)
 
     if model is None:
-        model = CNNBaseline(num_classes=len(torch.le.classes_)).to(device)
-        model.load_state_dict(torch.load("../models/best_model_cnn.pth"))
+        raise ValueError("Le modèle doit être fourni en paramètre.")
 
     model.eval()
     y_test_pred = []

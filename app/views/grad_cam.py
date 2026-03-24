@@ -1,9 +1,7 @@
-import os
 import numpy as np
 import cv2
 import torch
 import torchvision.transforms as transforms
-from torchvision import models
 
 # Load et preprocessed
 def preprocess_image(img_array):

@@ -3,16 +3,16 @@ import numpy as np
 import torch
 import librosa
 from pathlib import Path
-from scipy.signal import butter, filtfilt
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / 'notebooks'))
 from ConvNeXt import GPUAugmenter, RespiratoryModel
 
-#  Constantes 
-SR         = 22050
-TARGET_LEN = SR * 6
-N_REFS     = 3   # fichiers par classe pour la moyenne
+sys.path.insert(0, str(ROOT / 'app'))
+from config import SR  # noqa: E402
+from audio_utils import preprocess_audio, get_embedding  # noqa: E402
+
+N_REFS = 3   # fichiers par classe pour la moyenne
 
 CLASS_TO_FOLDER = {
     'asthma':    'asthma',
@@ -21,34 +21,6 @@ CLASS_TO_FOLDER = {
     'healthy':   'healthy',
     'pneumonia': 'pneumonia',
 }
-
-# Preprocessing 
-def bandpass_filter(audio, lowcut=100, highcut=2000, sr=SR, order=4):
-    nyq = sr / 2
-    b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
-    return filtfilt(b, a, audio).astype(np.float32)
-
-def pad_or_crop(audio, target_len=TARGET_LEN):
-    if len(audio) < target_len:
-        pad = target_len - len(audio)
-        audio = np.pad(audio, (pad // 2, pad - pad // 2))
-    else:
-        audio = audio[:target_len]
-    return audio
-
-def preprocess_audio(audio):
-    audio, _ = librosa.effects.trim(audio, top_db=20)
-    audio = bandpass_filter(audio)
-    audio = audio / (np.max(np.abs(audio)) + 1e-8)
-    return pad_or_crop(audio)
-
-# Extraction embedding avant la tête de classification
-def get_embedding(audio_array, model, augmenter, device):
-    tensor = torch.tensor(audio_array, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
-    with torch.no_grad():
-        spec     = augmenter(tensor, augment=False)
-        features = model.cnn(spec)                     # (1, 768, 1, 1)
-        return features.squeeze().cpu().numpy()        # (768,)
 
 # Main 
 def main():

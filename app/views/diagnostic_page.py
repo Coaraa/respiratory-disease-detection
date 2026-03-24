@@ -1,10 +1,8 @@
-import os
 import sys
 import json
 import cv2
 import numpy as np
 import torch
-import torch.nn as nn  
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -12,64 +10,17 @@ import plotly.express as px
 import pandas as pd
 import streamlit as st
 from pathlib import Path
-from scipy.signal import butter, filtfilt
-from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'app' / 'views'))
-
 import grad_cam
 
-# GPUAugmenter importé depuis notebooks/ConvNeXt.py
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'notebooks'))
 from ConvNeXt import GPUAugmenter, RespiratoryModel
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from snowflake_conn import get_snowflake_connection
-
-load_dotenv(Path(__file__).parent.parent.parent / '.env')
-
-# Constantes audio
-SR         = 22050
-TARGET_LEN = SR * 6  # 132 300 samples
-CLASSES    = ['asthma', 'bronchial', 'copd', 'healthy', 'pneumonia']
-CLASS_MAP  = {
-    'asthma':    'Asthme',
-    'bronchial': 'Bronchite',
-    'copd':      'BPCO',
-    'healthy':   'Sain',
-    'pneumonia': 'Pneumonie',
-}
-PHARMACIES = [
-    "PHARM_BORDEAUX_001", "PHARM_PARIS_002", "PHARM_LYON_003",
-    "PHARM_MARSEILLE_004", "PHARM_TOULOUSE_005",
-]
-CLINICAL_RECS = {
-    'asthma':    ("⚠️", "warning", "Suspicion d'asthme (sifflements détectés). Consultation médicale recommandée pour confirmation et prescription éventuelle de bronchodilatateurs."),
-    'bronchial': ("⚠️", "warning", "Suspicion de syndrome bronchite. Bilan ORL/pulmonaire conseillé."),
-    'copd':      ("🚨", "error",   "Suspicion de BPCO. Examen spirométrique urgent recommandé."),
-    'healthy':   ("✅", "success", "Murmure vésiculaire régulier. Aucune anomalie respiratoire majeure détectée."),
-    'pneumonia': ("🚨", "error",   "Suspicion de pneumonie. Consultation médicale urgente et radiographie pulmonaire recommandées."),
-}
-
-# Preprocessing
-def bandpass_filter(audio, lowcut=100, highcut=2000, sr=SR, order=4):
-    nyquist = sr / 2
-    b, a = butter(order, [lowcut / nyquist, highcut / nyquist], btype='band')
-    return filtfilt(b, a, audio).astype(np.float32)
-
-def pad_or_crop(audio, target_len=TARGET_LEN):
-    if len(audio) < target_len:
-        pad_total = target_len - len(audio)
-        pad_left  = pad_total // 2
-        audio = np.pad(audio, (pad_left, pad_total - pad_left))
-    else:
-        audio = audio[:target_len]
-    return audio
-
-def preprocess_audio(audio):
-    """Pipeline : trim → bandpass 100-2000 Hz → normalise → pad/crop 6s."""
-    audio, _ = librosa.effects.trim(audio, top_db=20)
-    audio = bandpass_filter(audio)
-    return pad_or_crop(audio)
+from config import SR, TARGET_LEN, CLASSES, CLASS_MAP, PHARMACIES, CLINICAL_RECS, DISEASE_COLORS_EN
+from audio_utils import preprocess_audio, get_embedding, compare_to_references
+from snowflake_conn import get_snowflake_connection, render_snowflake_sidebar
 
 # Chargement modèle 
 @st.cache_resource
@@ -95,15 +46,6 @@ def predict(audio_array, model, augmenter, device):
         probs   = torch.nn.functional.softmax(outputs, dim=1).cpu().numpy()[0]
     return dict(zip(CLASSES, probs.tolist()))
 
-# Chargement des embeddings 
-def get_embedding(audio_array, model, augmenter, device):
-    tensor = torch.tensor(audio_array, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
-    with torch.no_grad():
-        spec     = augmenter(tensor, augment=False)
-        features = model.cnn(spec)                   
-        return features.squeeze().cpu().numpy()      
-
-# Embeddings de référence
 @st.cache_resource
 def load_reference_embeddings():
     npz_path = Path(__file__).parent.parent.parent / 'models' / 'reference_embeddings.npz'
@@ -112,21 +54,9 @@ def load_reference_embeddings():
     data = np.load(npz_path)
     return {cls: data[cls] for cls in CLASSES if cls in data}
 
-def cosine_similarity(a, b):
-    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8))
-
-def compare_to_references(embedding, refs):
-    sims  = {cls: cosine_similarity(embedding, refs[cls]) for cls in CLASSES if cls in refs}
-    lo, hi = min(sims.values()), max(sims.values())
-    span  = hi - lo if hi > lo else 1.0
-    return {cls: (v - lo) / span for cls, v in sims.items()}
-
 def get_sf_connection():
-    """Récupère la connexion partagée via le TOTP stocké dans l'URL."""
     totp = st.query_params.get("_sf")
-    if totp:
-        return get_snowflake_connection(totp)
-    return None
+    return get_snowflake_connection(totp) if totp else None
 
 # Insert Snowflake
 def insert_prediction(pharmacie_id, classe_predite, probabilites_dict, confiance):
@@ -166,24 +96,8 @@ def diagnostic_page():
     # Sidebar
     with st.sidebar:
         pharmacie_id = st.selectbox("Pharmacie", PHARMACIES)
-
         st.markdown("---")
-        st.subheader("🔌 Snowflake")
-
-        if "_sf" not in st.query_params:
-            totp = st.text_input("Code MFA (6 chiffres)", max_chars=6, type="password")
-            if st.button("Connecter") and totp:
-                try:
-                    get_snowflake_connection(totp)     
-                    st.query_params["_sf"] = totp     
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Connexion échouée : {e}")
-        else:
-            st.success("✅ Connecté")
-            if st.button("Déconnecter"):
-                del st.query_params["_sf"]
-                st.rerun()
+        render_snowflake_sidebar()
 
    
     st.title("Diagnostic Respiratoire")
@@ -236,11 +150,7 @@ def diagnostic_page():
 
     with col_left:
         # Diagnostic principal
-        DISEASE_COLORS = {
-            'asthma': '#F59E0B', 'copd': '#EF4444', 'bronchial': '#8B5CF6',
-            'pneumonia': '#F97316', 'healthy': '#10B981',
-        }
-        color = DISEASE_COLORS.get(classe_predite, '#6B7280')
+        color = DISEASE_COLORS_EN.get(classe_predite, '#6B7280')
         st.markdown(f"""
         <div style="background:{color}18;border:1.5px solid {color}40;
                     border-radius:12px;padding:20px 24px;margin-bottom:16px">
@@ -269,7 +179,7 @@ def diagnostic_page():
         fig_bar = px.bar(
             df_preds, x='Probabilité (%)', y='Pathologie',
             orientation='h', color='Pathologie',
-            color_discrete_map={CLASS_MAP[k]: v for k, v in DISEASE_COLORS.items()},
+            color_discrete_map={CLASS_MAP[k]: v for k, v in DISEASE_COLORS_EN.items()},
         )
         fig_bar.update_layout(
             showlegend=False,
@@ -279,7 +189,7 @@ def diagnostic_page():
             plot_bgcolor='rgba(0,0,0,0)',
             height=220,
         )
-        st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_bar, width='stretch', config={'displayModeBar': False})
 
         # Similarité de référence
         refs = load_reference_embeddings()
@@ -294,7 +204,7 @@ def diagnostic_page():
             fig_sim = px.bar(
                 df_sim, x='Similarité (%)', y='Pathologie',
                 orientation='h', color='Pathologie',
-                color_discrete_map={CLASS_MAP[k]: v for k, v in DISEASE_COLORS.items()},
+                color_discrete_map={CLASS_MAP[k]: v for k, v in DISEASE_COLORS_EN.items()},
             )
             fig_sim.update_layout(
                 showlegend=False,
@@ -304,7 +214,7 @@ def diagnostic_page():
                 plot_bgcolor='rgba(0,0,0,0)',
                 height=220,
             )
-            st.plotly_chart(fig_sim, use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(fig_sim, width='stretch', config={'displayModeBar': False})
         insert_prediction(pharmacie_id, classe_predite, predictions, confiance)
 
     with col_right:
@@ -314,8 +224,8 @@ def diagnostic_page():
         fig_mel.colorbar(img, ax=ax, format='%+2.0f dB')
         ax.set_title('')
         plt.tight_layout(pad=0.5)
-        st.pyplot(fig_mel, use_container_width=True)
+        st.pyplot(fig_mel, width='stretch')
 
         st.markdown("#### Grad-CAM")
-        st.image(output_img, use_container_width=True,
+        st.image(output_img, width='stretch',
                  caption="Régions fréquentielles et temporelles activant le diagnostic")
